@@ -18,17 +18,89 @@
             padding: 10px 20px;
             font-size: 16px;
         }
-        .response {
+        table {
+            width: 100%;
+            border-collapse: collapse;
             margin-top: 20px;
-            white-space: pre-wrap; /* Giữ nguyên định dạng và xuống dòng */
+            max-height: 400px;
+            overflow-y: auto;
+            display: block;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            font-size: 12px; /* Set font size to 12px */
+            width: 150px; /* Ensure each column has a minimum width */
+        }
+        th {
+            background-color: #f4f4f4;
+            position: sticky;
+            top: 0;
+        }
+        thead {
+            display: table-header-group;
+        }
+        tbody {
+            display: block;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        /* Ensure header and body columns align */
+        table {
+            table-layout: fixed; /* Fixed layout for consistent column widths */
+        }
+        th {
+            word-wrap: break-word; /* Handle long words or text */
+        }
+        .copy-btn {
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            font-size: 12px;
+            border-radius: 3px;
+            margin-left: 5px;
+        }
+        .row-copy-btn {
+            cursor: pointer;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            font-size: 12px;
+            border-radius: 3px;
+            margin-left: 5px;
+        }
+        .total-count {
+            margin-bottom: 10px;
+            padding-top: 20px;
         }
     </style>
 </head>
 <body>
     <h1>Tracking Codes Submission</h1>
     <textarea id="tracking-codes" placeholder="Enter tracking codes, one per line..."></textarea>
-    <button id="submit-btn">Submit</button>
-    <div class="response" id="response"></div>
+    <button id="submit-btn">Submit</button> 
+    <div id="total-count" class="total-count">Total Rows: 0</div>
+    <div id="response">
+        <table id="response-table">
+            <thead>
+                <tr>
+                    <th>Tracking Code <button class="copy-btn" data-col="0">Copy</button></th>
+                    <th>Country <button class="copy-btn" data-col="1">Copy</button></th>
+                    <th>Location <button class="copy-btn" data-col="2">Copy</button></th>
+                    <th>Date & Time <button class="copy-btn" data-col="3">Copy</button></th>
+                    <th>Status <button class="copy-btn" data-col="4">Copy</button></th>
+                    <th>Additional Info <button class="copy-btn" data-col="5">Copy</button></th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Rows will be inserted here by JavaScript -->
+            </tbody>
+        </table>
+    </div>
     <script>
         document.getElementById('submit-btn').addEventListener('click', async () => {
             const trackingCodes = document.getElementById('tracking-codes').value
@@ -36,19 +108,91 @@
                 .map(code => code.trim())
                 .filter(code => code.length > 0);
 
-            const response = await fetch('/tracking', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ trackingCodes })
+            try {
+                const response = await fetch('/tracking', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ trackingCodes })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const data = await response.json(); // Read as JSON
+                const result = data.result; // Extract result from JSON
+                console.log('Raw result:', result); // Debugging line to check the raw result
+
+                // Split result into rows
+                const rows = result.split('\n').filter(row => row.trim() !== '');
+                const tableBody = document.querySelector('#response-table tbody');
+                
+                // Clear previous results
+                tableBody.innerHTML = ''; 
+
+                rows.forEach((row, index) => {
+                    const columns = row.split('\t'); // Split columns by tab
+
+                    if (columns.length === 6) {
+                        const tableRow = document.createElement('tr');
+
+                        // Create cells for each column
+                        columns.forEach(column => {
+                            const cell = document.createElement('td');
+                            cell.textContent = column;
+                            tableRow.appendChild(cell);
+                        });
+
+                        // Add a copy button for the entire row
+                        const copyRowBtn = document.createElement('button');
+                        copyRowBtn.textContent = 'Copy Row';
+                        copyRowBtn.className = 'row-copy-btn';
+                        copyRowBtn.addEventListener('click', () => {
+                            const rowData = Array.from(tableRow.children).map(cell => cell.textContent).join('\t');
+                            const tempTextarea = document.createElement('textarea');
+                            tempTextarea.value = rowData;
+                            document.body.appendChild(tempTextarea);
+                            tempTextarea.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(tempTextarea);
+                            alert('Row data copied to clipboard!');
+                        });
+                        const buttonCell = document.createElement('td');
+                        buttonCell.appendChild(copyRowBtn);
+                        tableRow.appendChild(buttonCell);
+
+                        tableBody.appendChild(tableRow);
+                    } else {
+                        console.warn('Skipping row with unexpected number of columns:', row);
+                    }
+                });
+
+                // Update total row count
+                document.getElementById('total-count').textContent = `Total Rows: ${rows.length}`;
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        });
+
+        // Add event listener for copy buttons
+        document.querySelectorAll('.copy-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const colIndex = button.getAttribute('data-col');
+                const table = document.querySelector('#response-table');
+                const cells = table.querySelectorAll(`tbody tr td:nth-child(${parseInt(colIndex) + 1})`);
+
+                // Create a temporary textarea to copy the text
+                const tempTextarea = document.createElement('textarea');
+                tempTextarea.value = Array.from(cells).map(cell => cell.textContent).join('\n');
+                document.body.appendChild(tempTextarea);
+                tempTextarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempTextarea);
+
+                alert('Column data copied to clipboard!');
             });
-
-            const result = await response.json();
-
-            // Thay thế dấu chấm bằng dấu xuống dòng
-            const formattedResult = result.result.replace(/\./g, '.\n');
-            document.getElementById('response').textContent = formattedResult;
         });
     </script>
 </body>
