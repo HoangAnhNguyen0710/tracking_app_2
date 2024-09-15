@@ -65,9 +65,10 @@ async function sendTrackingCodes(trackingNumbers) {
     const searchBtn = await page.$(
       "div[title=\"Click 'TRACK' to retrieve tracking information for your shipment.\"]"
     );
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     await searchBtn.click();
 
-    await new Promise((resolve) => setTimeout(resolve, 4000)); // Đợi 4 giây để kết quả hiển thị
+    await new Promise((resolve) => setTimeout(resolve, 6000)); // Đợi 4 giây để kết quả hiển thị
 
     let captchaResolved = true;
     const checkCaptcha = await page.$('button[data-yq-events="submitCode"]');
@@ -88,10 +89,12 @@ async function sendTrackingCodes(trackingNumbers) {
 
     if (captchaResolved) {
       try {
-          // Đợi điều hướng (nếu có) trước khi tiếp tục
-          await page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {
-              console.log("No navigation occurred.");
-          });
+          // Kiểm tra trạng thái trang đã sẵn sàng
+          
+          let pageIsReady = false
+          while (!pageIsReady) {
+            pageIsReady = await page.evaluate(() => document.readyState === 'complete');
+          }
   
           // Bấm nút "Skip" nếu tìm thấy
           const skipBtn = await page.$("a.introjs-skipbutton");
@@ -101,9 +104,10 @@ async function sendTrackingCodes(trackingNumbers) {
           } else {
               console.log('No skip button found');
           }
+
           // Đợi đến khi có dữ liệu clipboard hoặc timeout sau 10 giây
           let clipboardText = "";
-          const timeout = 10000; // 10 giây timeout
+          const timeout = 30000; // 30 giây timeout
           const pollingInterval = 500; // Kiểm tra clipboard mỗi 0.5 giây
           let elapsed = 0;
   
