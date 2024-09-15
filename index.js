@@ -67,7 +67,7 @@ async function sendTrackingCodes(trackingNumbers) {
     );
     await searchBtn.click();
 
-    await new Promise((resolve) => setTimeout(resolve, 3000)); // Đợi 3 giây để kết quả hiển thị
+    await new Promise((resolve) => setTimeout(resolve, 4000)); // Đợi 4 giây để kết quả hiển thị
 
     let captchaResolved = true;
     const checkCaptcha = await page.$('button[data-yq-events="submitCode"]');
@@ -87,22 +87,46 @@ async function sendTrackingCodes(trackingNumbers) {
     }
 
     if (captchaResolved) {
-      await new Promise((resolve) => setTimeout(resolve, 5000)); // Đợi 5 giây để kết quả hiển thị
-
-      const skipBtn = await page.$("a.introjs-skipbutton");
-
-      if (skipBtn) {
-        await skipBtn.click();
-        console.log('Clicked skip button');
-      } else {
-        console.log('No skip button found');
+      try {
+          // Đợi điều hướng (nếu có) trước khi tiếp tục
+          await page.waitForNavigation({ waitUntil: 'networkidle0' }).catch(() => {
+              console.log("No navigation occurred.");
+          });
+  
+          // Bấm nút "Skip" nếu tìm thấy
+          const skipBtn = await page.$("a.introjs-skipbutton");
+          if (skipBtn) {
+              await skipBtn.click();
+              console.log('Clicked skip button');
+          } else {
+              console.log('No skip button found');
+          }
+          // Đợi đến khi có dữ liệu clipboard hoặc timeout sau 10 giây
+          let clipboardText = "";
+          const timeout = 10000; // 10 giây timeout
+          const pollingInterval = 500; // Kiểm tra clipboard mỗi 0.5 giây
+          let elapsed = 0;
+  
+          while (clipboardText === "" && elapsed < timeout) {
+              await new Promise((resolve) => setTimeout(resolve, pollingInterval));
+              clipboardText = await getClipboardText(page);
+              elapsed += pollingInterval;
+          }
+  
+          if (clipboardText !== "") {
+              text += `${clipboardText}\n`;
+          } else {
+              console.log("Clipboard text is still empty after timeout");
+          }
+  
+  
+      } catch (error) {
+          console.log("Error occurred:", error.message);
+          // Trả về text hiện tại trong trường hợp lỗi
+          return text;
       }
-      
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const clipboardText = await getClipboardText(page);
-      text += `${clipboardText}\n`;
-    }
+  }
+  
     await page.goto("https://www.17track.net/en");
   }
 
