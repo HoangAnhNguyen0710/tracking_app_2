@@ -78,7 +78,8 @@ async function convertToCsv(text) {
 // Hàm gửi các mã tracking
 async function sendTrackingCodes(trackingNumbers) {
   const browser = await puppeteer.launch({
-    headless: true
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
