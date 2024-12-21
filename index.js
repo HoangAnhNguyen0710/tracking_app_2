@@ -35,7 +35,7 @@ async function convertToCsv(text) {
 
     // Map remaining lines into an array of rows
     const rows = lines.slice(1).map(line => line.split(/\t+|\s{2,}/));
-    console.log("Parsed Rows:", rows); // Debugging rows
+    // console.log("Parsed Rows:", rows); // Debugging rows
 
     // Define the output headers for the CSV
     const outputHeaders = [
@@ -89,14 +89,13 @@ async function sendTrackingCodes(trackingNumbers) {
   // const page = await browser.newPage();
   let text = "";
   let url = "https://www.ship24.com/tracking";
-  let params = "p=";
 
   console.log("Start...");
 
   for (const chunk of chunkList(trackingNumbers, 10)) {
     const trackingNumbersStr = chunk.join(",");
+    let params = "p=";
     params = params.concat(trackingNumbersStr);
-
     await page.goto(`${url}?${params}`);
 
     const iconSelector = 'i.text-2xl.text-gray-500.s24-copy.mr-2';
@@ -128,18 +127,18 @@ async function sendTrackingCodes(trackingNumbers) {
       await page.evaluate(() => {
         document.addEventListener("copy", (event) => {
           const copiedData = event.clipboardData.getData("text/plain");
-          console.log("Copied data:", copiedData);
+          // console.log("Copied data:", copiedData);
         });
       });
 
-      console.log("Clipboard data:", clipboardData);
+      // console.log("Clipboard data:", clipboardData);
 
-        console.log('Clipboard data:', clipboardData);
+        // console.log('Clipboard data:', clipboardData);
         text += clipboardData ? clipboardData : '';
       
     }
 
-    console.log(await convertToCsv(text));
+    // console.log(await convertToCsv(text));
   }
 
   await browser.close();
