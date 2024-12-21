@@ -133,9 +133,10 @@
                 tableBody.innerHTML = ''; 
 
                 rows.forEach((row, index) => {
-                    const columns = row.split('\t'); // Split columns by tab
-
-                    if (columns.length === 6) {
+                    console.log(row)
+                    const columns = row.split('\\'); // Split columns by tab
+                    console.log(columns)
+                    // if (columns.length === 6) {
                         const tableRow = document.createElement('tr');
 
                         // Create cells for each column
@@ -164,9 +165,9 @@
                         tableRow.appendChild(buttonCell);
 
                         tableBody.appendChild(tableRow);
-                    } else {
-                        console.warn('Skipping row with unexpected number of columns:', row);
-                    }
+                    // } else {
+                    //     console.warn('Skipping row with unexpected number of columns:', row);
+                    // }
                 });
 
                 // Update total row count

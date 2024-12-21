@@ -1,6 +1,7 @@
 const express = require("express");
 const puppeteer = require("puppeteer");
 const path = require("path"); 
+const { stringify } = require('csv-stringify');
 
 const app = express();
 app.use(express.json()); // Đảm bảo phân tích cú pháp JSON
@@ -19,123 +20,129 @@ function chunkList(lst, n) {
   return result;
 }
 
-async function getClipboardText(page) {
-  const button = await page.$(
-    'button[data-original-title="Copy tracking results summary and paste into an Excel for use."]'
-  );
-  const clipboardText = await button.evaluate((node) =>
-    node.getAttribute("data-clipboard-text")
-  );
-  const cleanedText = clipboardText
-    .split('\n')
-    .filter(line => {
-      // Loại bỏ các dòng chứa thông tin không mong muốn
-      return !line.includes('Powered by www.17track.net') && line.trim() !== '======================================';
-    })
-    .join('\n')
-    .trim();
-  return cleanedText;
+async function convertToCsv(text) {
+  try {
+    // Ensure input text is not empty
+    if (!text || typeof text !== "string") {
+      throw new Error("Input text must be a non-empty string.");
+    }
+
+    // Split the text into lines
+    const lines = text.trim().split('\n').map(line => line.trim());
+
+    // Extract headers from the first line
+    const headers = lines[0].split(/\s{2,}/);
+
+    // Map remaining lines into an array of rows
+    const rows = lines.slice(1).map(line => line.split(/\t+|\s{2,}/));
+    console.log("Parsed Rows:", rows); // Debugging rows
+
+    // Define the output headers for the CSV
+    const outputHeaders = [
+      "tracking code",
+      "country",
+      "location",
+      "date & time",
+      "status",
+      "additional info",
+    ];
+
+    // Map rows to match the output format
+    const csvRows = rows.map(row => {
+      const trackingCode = row[0] || "";
+      const country = "";
+      const location = row[4] || "";
+      const dateTime = row[1] || "";
+      const status = row[5] || "";
+      const additionalInfo = row[3] || "";
+
+      return [trackingCode, country, location, dateTime, status, additionalInfo];
+    });
+
+    return new Promise((resolve, reject) => {
+      // Add headers as the first row
+      const csvData = [...csvRows];
+
+      // Use csv-stringify to convert the data to CSV
+      stringify(csvData,{ delimiter: '\\' }, (err, output) => {
+        if (err) reject(err);
+        else resolve(output);
+      });
+    });
+  } catch (error) {
+    console.error("Error in convertToCsv:", error.message);
+    throw error;
+  }
 }
 
 // Hàm gửi các mã tracking
 async function sendTrackingCodes(trackingNumbers) {
-  // console.log(trackingNumbers)
   const browser = await puppeteer.launch({
-    headless: false,
-    // executablePath: '/usr/bin/chromium', // Đường dẫn tới Chromium
-    // args: [
-    //   '--no-sandbox',
-    //   '--disable-setuid-sandbox',
-    //   '--disable-gpu', // Thêm tham số này để tắt GPU acceleration
-    //   '--remote-debugging-port=9222', // Có thể thêm nếu cần thiết
-    //   '--display=:99', // Đảm bảo Puppeteer sử dụng DISPLAY đúng
-    // ], // Cấu hình thêm nếu cần
+    headless: true
   });
-  const page = await browser.newPage();
-  let text = ""
-  await page.goto("https://www.17track.net/en");
+  const context = await browser.createBrowserContext();
+  const page = await context.newPage();
+
+  // Gán quyền clipboard cho trang web
+  await context.overridePermissions('https://www.ship24.com/tracking', ['clipboard-read', 'clipboard-write']);
+  // const page = await browser.newPage();
+  let text = "";
+  let url = "https://www.ship24.com/tracking";
+  let params = "p=";
 
   console.log("Start...");
-  await new Promise((resolve) => setTimeout(resolve, 3000)); // Tạm dừng 10 giây để người dùng hoàn tất CAPTCHA
 
-  for (const chunk of chunkList(trackingNumbers, 40)) {
-    const trackingNumbersStr = chunk.join("\n");
-    const searchBox = await page.$("textarea[id='auto-size-textarea']");
-    await searchBox.type(trackingNumbersStr);
-    const searchBtn = await page.$(
-      "div[title=\"Click 'TRACK' to retrieve tracking information for your shipment.\"]"
-    );
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    await searchBtn.click();
+  for (const chunk of chunkList(trackingNumbers, 10)) {
+    const trackingNumbersStr = chunk.join(",");
+    params = params.concat(trackingNumbersStr);
 
-    await new Promise((resolve) => setTimeout(resolve, 6000)); // Đợi 4 giây để kết quả hiển thị
+    await page.goto(`${url}?${params}`);
 
-    let captchaResolved = true;
-    const checkCaptcha = await page.$('button[data-yq-events="submitCode"]');
+    const iconSelector = 'i.text-2xl.text-gray-500.s24-copy.mr-2';
 
-    if (checkCaptcha) {
-      captchaResolved = false;
-      console.log("CAPTCHA detected, waiting for user to solve...");
+    // Wait for the icon to be available in the DOM
+    await page.waitForSelector(iconSelector);
+
+    const iconElement = await page.$(iconSelector);
+    if (iconElement) {
+      await iconElement.click();
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      
+      const clipboardData = await page.$$eval("button span", async (spans) => {
+        for (let span of spans) {
+          if (span.textContent.trim() === "Copy status and last event details") {
+            const button = span.closest('button');
+            button.click(); // Simulate the button click
+            
+            // Wait for the clipboard data to be available (optional delay)
+            await new Promise((resolve) => setTimeout(resolve, 500)); 
+            
+            // Read and return the clipboard text
+            return navigator.clipboard.readText();
+          }
+        }
+        return null; // Return null if no matching button is found
+      });
+      
+      await page.evaluate(() => {
+        document.addEventListener("copy", (event) => {
+          const copiedData = event.clipboardData.getData("text/plain");
+          console.log("Copied data:", copiedData);
+        });
+      });
+
+      console.log("Clipboard data:", clipboardData);
+
+        console.log('Clipboard data:', clipboardData);
+        text += clipboardData ? clipboardData : '';
+      
     }
 
-    while (!captchaResolved) {
-      await new Promise((resolve) => setTimeout(resolve, 1500)); // Đợi 1 giây trước khi kiểm tra lại
-      const captchaButton = await page.$('button[data-yq-events="submitCode"]');
-      if (!captchaButton) {
-        captchaResolved = true; // CAPTCHA đã được giải quyết
-        console.log("continue...");
-      }
-    }
-
-    if (captchaResolved) {
-      try {
-          // Kiểm tra trạng thái trang đã sẵn sàng
-          
-          let pageIsReady = false
-          while (!pageIsReady) {
-            pageIsReady = await page.evaluate(() => document.readyState === 'complete');
-          }
-  
-          // Bấm nút "Skip" nếu tìm thấy
-          const skipBtn = await page.$("a.introjs-skipbutton");
-          if (skipBtn) {
-              await skipBtn.click();
-              console.log('Clicked skip button');
-          } else {
-              console.log('No skip button found');
-          }
-
-          // Đợi đến khi có dữ liệu clipboard hoặc timeout sau 10 giây
-          let clipboardText = "";
-          const timeout = 30000; // 30 giây timeout
-          const pollingInterval = 500; // Kiểm tra clipboard mỗi 0.5 giây
-          let elapsed = 0;
-  
-          while (clipboardText === "" && elapsed < timeout) {
-              await new Promise((resolve) => setTimeout(resolve, pollingInterval));
-              clipboardText = await getClipboardText(page);
-              elapsed += pollingInterval;
-          }
-  
-          if (clipboardText !== "") {
-              text += `${clipboardText}\n`;
-          } else {
-              console.log("Clipboard text is still empty after timeout");
-          }
-  
-  
-      } catch (error) {
-          console.log("Error occurred:", error.message);
-          // Trả về text hiện tại trong trường hợp lỗi
-          return text;
-      }
-  }
-  
-    await page.goto("https://www.17track.net/en");
+    console.log(await convertToCsv(text));
   }
 
   await browser.close();
-  return text;
+  return await convertToCsv(text);
 }
 
 // Route chính để phục vụ tệp HTML
