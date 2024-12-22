@@ -96,12 +96,13 @@ async function sendTrackingCodes(trackingNumbers) {
     const trackingNumbersStr = chunk.join(",");
     let params = "p=";
     params = params.concat(trackingNumbersStr);
+    console.log(params);
     await page.goto(`${url}?${params}`);
 
     const iconSelector = 'i.text-2xl.text-gray-500.s24-copy.mr-2';
 
     // Wait for the icon to be available in the DOM
-    await page.waitForSelector(iconSelector);
+    await page.waitForSelector(iconSelector, { timeout: 0 });
 
     const iconElement = await page.$(iconSelector);
     if (iconElement) {
@@ -127,7 +128,7 @@ async function sendTrackingCodes(trackingNumbers) {
       await page.evaluate(() => {
         document.addEventListener("copy", (event) => {
           const copiedData = event.clipboardData.getData("text/plain");
-          // console.log("Copied data:", copiedData);
+          console.log("Copied data:", copiedData);
         });
       });
 
@@ -140,7 +141,7 @@ async function sendTrackingCodes(trackingNumbers) {
 
     // console.log(await convertToCsv(text));
   }
-
+  console.log("done");
   await browser.close();
   return await convertToCsv(text);
 }

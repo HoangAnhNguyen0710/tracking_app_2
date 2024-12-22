@@ -4,9 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "heroku-postbuild": "bash postbuild.bash",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "bash ./render-build.sh && npm install",
     "start": "nodemon index.js"
   },
   "keywords": [],
