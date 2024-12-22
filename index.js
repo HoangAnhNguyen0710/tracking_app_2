@@ -24,7 +24,7 @@ async function convertToCsv(text) {
   try {
     // Ensure input text is not empty
     if (!text || typeof text !== "string") {
-      throw new Error("Input text must be a non-empty string.");
+      return text;
     }
 
     // Split the text into lines
@@ -81,70 +81,148 @@ async function sendTrackingCodes(trackingNumbers) {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
-  const context = await browser.createBrowserContext();
-  const page = await context.newPage();
 
-  // Gán quyền clipboard cho trang web
-  await context.overridePermissions('https://www.ship24.com/tracking', ['clipboard-read', 'clipboard-write']);
-  // const page = await browser.newPage();
   let text = "";
-  let url = "https://www.ship24.com/tracking";
+  try {
+    const context = await browser.createBrowserContext();
+    const page = await context.newPage();
 
-  console.log("Start...");
+    // Gán quyền clipboard cho trang web
+    await context.overridePermissions('https://www.ship24.com/tracking', ['clipboard-read', 'clipboard-write']);
 
-  for (const chunk of chunkList(trackingNumbers, 10)) {
-    const trackingNumbersStr = chunk.join(",");
-    let params = "p=";
-    params = params.concat(trackingNumbersStr);
-    console.log(params);
-    await page.goto(`${url}?${params}`);
+    let url = "https://www.ship24.com/tracking";
 
-    const iconSelector = 'i.text-2xl.text-gray-500.s24-copy.mr-2';
+    console.log("Start...");
 
-    // Wait for the icon to be available in the DOM
-    await page.waitForSelector(iconSelector, { timeout: 0 });
+    for (const chunk of chunkList(trackingNumbers, 10)) {
+      const trackingNumbersStr = chunk.join(",");
+      let params = "p=";
+      params = params.concat(trackingNumbersStr);
+      console.log(params);
+      await page.goto(`${url}?${params}`);
 
-    const iconElement = await page.$(iconSelector);
-    if (iconElement) {
-      await iconElement.click();
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      const clipboardData = await page.$$eval("button span", async (spans) => {
-        for (let span of spans) {
-          if (span.textContent.trim() === "Copy status and last event details") {
-            const button = span.closest('button');
-            button.click(); // Simulate the button click
-            
-            // Wait for the clipboard data to be available (optional delay)
-            await new Promise((resolve) => setTimeout(resolve, 500)); 
-            
-            // Read and return the clipboard text
-            return navigator.clipboard.readText();
+      const iconSelector = 'i.text-2xl.text-gray-500.s24-copy.mr-2';
+
+      // Wait for the icon to be available in the DOM
+      await page.waitForSelector(iconSelector, { timeout: 0 });
+
+      const iconElement = await page.$(iconSelector);
+      if (iconElement) {
+        await iconElement.click();
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        const clipboardData = await page.$$eval("button span", async (spans) => {
+          for (let span of spans) {
+            if (span.textContent.trim() === "Copy status and last event details") {
+              const button = span.closest('button');
+              button.click(); // Simulate the button click
+
+              // Wait for the clipboard data to be available (optional delay)
+              await new Promise((resolve) => setTimeout(resolve, 400));
+
+              // Read and return the clipboard text
+              return navigator.clipboard.readText();
+            }
           }
-        }
-        return null; // Return null if no matching button is found
-      });
-      
-      await page.evaluate(() => {
-        document.addEventListener("copy", (event) => {
-          const copiedData = event.clipboardData.getData("text/plain");
-          console.log("Copied data:", copiedData);
+          return null; // Return null if no matching button is found
         });
-      });
 
-      // console.log("Clipboard data:", clipboardData);
-
-        // console.log('Clipboard data:', clipboardData);
         text += clipboardData ? clipboardData : '';
-      
+      }
     }
 
-    // console.log(await convertToCsv(text));
+    console.log("done");
+  } catch (error) {
+    console.error("An error occurred:", error.message);
+    return await convertToCsv(text); // Trả về dữ liệu hiện tại khi gặp lỗi
+  } finally {
+    await browser.close();
   }
-  console.log("done");
-  await browser.close();
-  return await convertToCsv(text);
+
+  return await convertToCsv(text); // Trả về dữ liệu sau khi hoàn tất
 }
+
+// async function sendTrackingCodes(trackingNumbers) {
+//   const browser = await puppeteer.launch({
+//     headless: true,
+//     args: ['--no-sandbox', '--disable-setuid-sandbox'],
+//   });
+
+//   let text = "";
+//   try {
+//     const context = await browser.createBrowserContext();
+//     const page = await context.newPage();
+
+//     // Gán quyền clipboard cho trang web
+//     await context.overridePermissions('https://www.ship24.com/tracking', ['clipboard-read', 'clipboard-write']);
+
+//     let url = "https://www.ship24.com/tracking";
+
+//     console.log("Start...");
+
+//     // Tạo các nhóm 10 mã tracking
+//     const chunks = chunkList(trackingNumbers, 10);
+
+//     // Hàm xử lý một nhóm mã tracking
+//     const processChunk = async (chunk) => {
+//       const trackingNumbersStr = chunk.join(",");
+//       let params = "p=" + trackingNumbersStr;
+//       console.log(params);
+
+//       const newPage = await context.newPage(); // Mỗi nhóm xử lý trên một page riêng
+//       await newPage.goto(`${url}?${params}`);
+
+//       const iconSelector = 'i.text-2xl.text-gray-500.s24-copy.mr-2';
+//       await newPage.waitForSelector(iconSelector, { timeout: 0 });
+
+//       const iconElement = await newPage.$(iconSelector);
+//       if (iconElement) {
+//         await iconElement.click();
+//         console.log("mita")
+//         await new Promise((resolve) => setTimeout(resolve, 500));
+
+//         const clipboardData = await newPage.$$eval("button span", async (spans) => {
+//           for (let span of spans) {
+//             if (span.textContent.trim() === "Copy status and last event details") {
+//               const button = span.closest('button');
+//               button.click(); // Simulate the button click
+
+//               // Wait for the clipboard data to be available (optional delay)
+//               await new Promise((resolve) => setTimeout(resolve, 500));
+
+//               // Read and return the clipboard text
+//               return navigator.clipboard.readText();
+//             }
+//           }
+//           return null; // Return null if no matching button is found
+//         });
+
+//         return clipboardData || ""; // Trả về dữ liệu clipboard
+//       }
+
+//       return "";
+//     };
+
+//     // Xử lý các nhóm song song
+//     const results = await Promise.all(
+//       chunks.map(async (chunk) => await convertToCsv(processChunk(chunk)))
+//     );
+    
+//     console.log(results)
+//     // Gộp tất cả kết quả lại thành một chuỗi
+//     text = results.join("");
+
+//     console.log("done");
+//   } catch (error) {
+//     console.error("An error occurred:", error.message);
+//     return await convertToCsv(text); // Trả về dữ liệu hiện tại khi gặp lỗi
+//   } finally {
+//     await browser.close();
+//   }
+
+//   return await convertToCsv(text); // Trả về dữ liệu sau khi hoàn tất
+// }
+
 
 // Route chính để phục vụ tệp HTML
 app.get("/", (req, res) => {
