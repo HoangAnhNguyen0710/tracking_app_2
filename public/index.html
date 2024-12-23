@@ -84,6 +84,7 @@
     <textarea id="tracking-codes" placeholder="Enter tracking codes, one per line..."></textarea>
     <button id="submit-btn">Submit</button> 
     <div id="total-count" class="total-count">Total Rows: 0</div>
+    <button id="download-csv-btn">Download CSV</button>
     <div id="response">
         <table id="response-table">
             <thead>
@@ -123,7 +124,6 @@
 
                 const data = await response.json(); // Read as JSON
                 const result = data.result; // Extract result from JSON
-                console.log('Raw result:', result); // Debugging line to check the raw result
 
                 // Split result into rows
                 const rows = result.split('\n').filter(row => row.trim() !== '');
@@ -133,41 +133,36 @@
                 tableBody.innerHTML = ''; 
 
                 rows.forEach((row, index) => {
-                    console.log(row)
-                    const columns = row.split('\\'); // Split columns by tab
-                    console.log(columns)
-                    // if (columns.length === 6) {
-                        const tableRow = document.createElement('tr');
+                    const columns = row.split('\\'); // Split columns by '\\'
 
-                        // Create cells for each column
-                        columns.forEach(column => {
-                            const cell = document.createElement('td');
-                            cell.textContent = column;
-                            tableRow.appendChild(cell);
-                        });
+                    const tableRow = document.createElement('tr');
 
-                        // Add a copy button for the entire row
-                        const copyRowBtn = document.createElement('button');
-                        copyRowBtn.textContent = 'Copy Row';
-                        copyRowBtn.className = 'row-copy-btn';
-                        copyRowBtn.addEventListener('click', () => {
-                            const rowData = Array.from(tableRow.children).map(cell => cell.textContent).join('\t');
-                            const tempTextarea = document.createElement('textarea');
-                            tempTextarea.value = rowData;
-                            document.body.appendChild(tempTextarea);
-                            tempTextarea.select();
-                            document.execCommand('copy');
-                            document.body.removeChild(tempTextarea);
-                            alert('Row data copied to clipboard!');
-                        });
-                        const buttonCell = document.createElement('td');
-                        buttonCell.appendChild(copyRowBtn);
-                        tableRow.appendChild(buttonCell);
+                    // Create cells for each column
+                    columns.forEach(column => {
+                        const cell = document.createElement('td');
+                        cell.textContent = column;
+                        tableRow.appendChild(cell);
+                    });
 
-                        tableBody.appendChild(tableRow);
-                    // } else {
-                    //     console.warn('Skipping row with unexpected number of columns:', row);
-                    // }
+                    // Add a copy button for the entire row
+                    const copyRowBtn = document.createElement('button');
+                    copyRowBtn.textContent = 'Copy Row';
+                    copyRowBtn.className = 'row-copy-btn';
+                    copyRowBtn.addEventListener('click', () => {
+                        const rowData = Array.from(tableRow.children).map(cell => cell.textContent).join('\t');
+                        const tempTextarea = document.createElement('textarea');
+                        tempTextarea.value = rowData;
+                        document.body.appendChild(tempTextarea);
+                        tempTextarea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempTextarea);
+                        alert('Row data copied to clipboard!');
+                    });
+                    const buttonCell = document.createElement('td');
+                    buttonCell.appendChild(copyRowBtn);
+                    tableRow.appendChild(buttonCell);
+
+                    tableBody.appendChild(tableRow);
                 });
 
                 // Update total row count
@@ -194,6 +189,28 @@
 
                 alert('Column data copied to clipboard!');
             });
+        });
+
+        // Add event listener for download CSV button
+        document.getElementById('download-csv-btn').addEventListener('click', () => {
+            const rows = document.querySelectorAll('#response-table tbody tr');
+            const csvData = [];
+
+            rows.forEach(row => {
+                const cells = Array.from(row.querySelectorAll('td')).map(cell => cell.textContent);
+                csvData.push(cells.join(','));
+            });
+
+            const csvContent = csvData.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'tracking_results.csv');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         });
     </script>
 </body>
