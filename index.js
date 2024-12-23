@@ -114,6 +114,7 @@ async function sendTrackingCodes(trackingNumbers) {
               if (span.textContent.trim() === "Copy status and last event details") {
                 const button = span.closest('button');
                 button.click();
+                console.log("clicked copy to clipboard\n");
                 await new Promise((resolve) => setTimeout(resolve, 500)); 
                 return navigator.clipboard.readText();
               }
@@ -122,6 +123,7 @@ async function sendTrackingCodes(trackingNumbers) {
           });
 
           if (clipboardData) {
+            console.log("clipboard: " +  clipboardData || "none");
             text += await convertToCsv(clipboardData) + "\n";
           }
         }
