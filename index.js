@@ -80,7 +80,7 @@ async function sendTrackingCodes(trackingNumbers) {
   let text = ""; // Initialize the result text
   const url = "https://www.ship24.com/tracking";
 
-  try {
+  // try {
     const browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
@@ -98,7 +98,7 @@ async function sendTrackingCodes(trackingNumbers) {
       let params = "p=".concat(trackingNumbersStr);
       console.log(params);
 
-      try {
+      // try {
         await page.goto(`${url}?${params}`);
 
         const iconSelector = 'i.text-2xl.text-gray-500.s24-copy.mr-2';
@@ -107,6 +107,7 @@ async function sendTrackingCodes(trackingNumbers) {
 
         if (iconElement) {
           await iconElement.click();
+          console.log("1st click...");
           await new Promise((resolve) => setTimeout(resolve, 1000));
 
           const clipboardData = await page.$$eval("button span", async (spans) => {
@@ -114,7 +115,7 @@ async function sendTrackingCodes(trackingNumbers) {
               if (span.textContent.trim() === "Copy status and last event details") {
                 const button = span.closest('button');
                 button.click();
-                console.log("clicked copy to clipboard\n");
+                console.log("2nd click\n");
                 await new Promise((resolve) => setTimeout(resolve, 500)); 
                 return navigator.clipboard.readText();
               }
@@ -127,17 +128,18 @@ async function sendTrackingCodes(trackingNumbers) {
             text += await convertToCsv(clipboardData) + "\n";
           }
         }
-      } catch (err) {
-        console.error(`Error processing chunk: ${params}`, err);
-        return text;
-      }
+      // } catch (err) {
+      //   console.error(`Error processing chunk: ${params}`, err);
+      //   return text;
+      // }
     }
 
+    console.log("data: " +  text.length > 0 ? text : "none");
     await browser.close();
     console.log("done\n");
-  } catch (err) {
-    console.error("An error occurred:", err);
-  }
+  // } catch (err) {
+  //   console.error("An error occurred:", err);
+  // }
 
   return text; // Return the final processed text
 }
