@@ -93,15 +93,29 @@ async function sendTrackingCodes(trackingNumbers) {
 
     // const isClipboardSupported = 'clipboard' in navigator;
     // console.log('Clipboard supported:', isClipboardSupported);
-    console.log("Start...");
 
+    console.log("Start...");
+    let counter = 0;
     for (const chunk of chunkList(trackingNumbers, 10)) {
+      counter += 1;
       const trackingNumbersStr = chunk.join(",");
       let params = "p=".concat(trackingNumbersStr);
-      console.log(params);
+      // console.log(params);
+      console.log(counter);
 
       try {
         await page.goto(`${url}?${params}`);
+
+        // Tự động chấp nhận cookies nếu có popup
+        // await page.evaluate(() => {
+        //   // Tìm nút "Accept Cookies" (hoặc tương tự) trên trang
+        //   const acceptButton = document.querySelector('[aria-label="Accept all cookies"]') || 
+        //                        document.querySelector('[data-cookieconsent="accept"]') || 
+        //                        document.querySelector('button.accept-cookies'); // Thêm các selector khác nếu cần
+        //   if (acceptButton) {
+        //     acceptButton.click();
+        //   }
+        // });
 
         const iconSelector = 'i.text-2xl.text-gray-500.s24-copy.mr-2';
         await page.waitForSelector(iconSelector, { timeout: 0 });
@@ -109,7 +123,7 @@ async function sendTrackingCodes(trackingNumbers) {
         if (iconElement) {
           await iconElement.click();
           await new Promise((resolve) => setTimeout(resolve, 1000));
-          console.log("1st click");
+          // console.log("1st click");
           const clipboardData = await page.$$eval("button span", async (spans) => {
             for (let span of spans) {
               if (span.textContent.trim() === "Copy status and last event details") {
@@ -123,7 +137,7 @@ async function sendTrackingCodes(trackingNumbers) {
           });
 
           if (clipboardData) {
-            console.log("clipboard: " +  clipboardData || "none");
+            // console.log("clipboard: " +  clipboardData || "none");
             text += await convertToCsv(clipboardData) + "\n";
           }
         }

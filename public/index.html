@@ -77,6 +77,25 @@
             margin-bottom: 10px;
             padding-top: 20px;
         }
+        /* CSS cho biểu tượng loading */
+        #loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3; /* Màu nền */
+            border-top: 4px solid #3498db; /* Màu xoay */
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        /* Hiệu ứng xoay */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -85,6 +104,12 @@
     <button id="submit-btn">Submit</button> 
     <div id="total-count" class="total-count">Total Rows: 0</div>
     <button id="download-csv-btn">Download CSV</button>
+
+    <!-- Biểu tượng loading -->
+    <div id="loading">
+        <div class="spinner"></div>
+    </div>
+
     <div id="response">
         <table id="response-table">
             <thead>
@@ -102,6 +127,7 @@
             </tbody>
         </table>
     </div>
+
     <script>
         document.getElementById('submit-btn').addEventListener('click', async () => {
             const trackingCodes = document.getElementById('tracking-codes').value
@@ -110,6 +136,9 @@
                 .filter(code => code.length > 0);
 
             try {
+                // Hiển thị biểu tượng loading
+                document.getElementById('loading').style.display = 'block';
+
                 const response = await fetch('/tracking', {
                     method: 'POST',
                     headers: {
@@ -167,8 +196,12 @@
 
                 // Update total row count
                 document.getElementById('total-count').textContent = `Total Rows: ${rows.length}`;
+
             } catch (error) {
                 console.error('Error fetching data:', error);
+            } finally {
+                // Ẩn biểu tượng loading sau khi xử lý xong
+                document.getElementById('loading').style.display = 'none';
             }
         });
 
