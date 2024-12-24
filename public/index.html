@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tracking Codes Submission</title>
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script> -->
+    <script src="./xlsx.full.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -103,7 +105,7 @@
     <textarea id="tracking-codes" placeholder="Enter tracking codes, one per line..."></textarea>
     <button id="submit-btn">Submit</button> 
     <div id="total-count" class="total-count">Total Rows: 0</div>
-    <button id="download-csv-btn">Download CSV</button>
+    <button id="download-csv-btn">Download Excel</button>
 
     <!-- Biểu tượng loading -->
     <div id="loading">
@@ -226,25 +228,26 @@
 
         // Add event listener for download CSV button
         document.getElementById('download-csv-btn').addEventListener('click', () => {
-            const rows = document.querySelectorAll('#response-table tbody tr');
-            const csvData = [];
+        const rows = document.querySelectorAll('#response-table tbody tr');
+        const data = [];
 
-            rows.forEach(row => {
-                const cells = Array.from(row.querySelectorAll('td')).map(cell => cell.textContent);
-                csvData.push(cells.join(','));
-            });
-
-            const csvContent = csvData.join('\n');
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-
-            const link = document.createElement('a');
-            link.setAttribute('href', url);
-            link.setAttribute('download', 'tracking_results.csv');
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+        // Extract data from table rows
+        rows.forEach(row => {
+            const cells = Array.from(row.querySelectorAll('td')).map(cell => cell.textContent);
+            data.push(cells);
         });
+
+        // Create a workbook and worksheet
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(data);
+
+        // Add the worksheet to the workbook
+        XLSX.utils.book_append_sheet(wb, ws, 'Tracking Results');
+
+        // Generate the Excel file and trigger the download
+        XLSX.writeFile(wb, 'tracking_results.xlsx');
+    });
+
     </script>
 </body>
 </html>
