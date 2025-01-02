@@ -1,127 +1,99 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tracking Codes Submission</title>
     <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script> -->
     <script src="./xlsx.full.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-        textarea {
-            width: 100%;
-            height: 200px;
-        }
-        button {
-            margin-top: 10px;
-            padding: 10px 20px;
-            font-size: 16px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-            max-height: 400px;
-            overflow-y: auto;
-            display: block;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-            font-size: 12px; /* Set font size to 12px */
-            width: 150px; /* Ensure each column has a minimum width */
-        }
-        th {
-            background-color: #f4f4f4;
-            position: sticky;
-            top: 0;
-        }
-        thead {
-            display: table-header-group;
-        }
-        tbody {
-            display: block;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        /* Ensure header and body columns align */
-        table {
-            table-layout: fixed; /* Fixed layout for consistent column widths */
-        }
-        th {
-            word-wrap: break-word; /* Handle long words or text */
-        }
-        .copy-btn {
-            cursor: pointer;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            font-size: 12px;
-            border-radius: 3px;
-            margin-left: 5px;
-        }
-        .row-copy-btn {
-            cursor: pointer;
-            background-color: #28a745;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            font-size: 12px;
-            border-radius: 3px;
-            margin-left: 5px;
-        }
-        .total-count {
-            margin-bottom: 10px;
-            padding-top: 20px;
-        }
-        /* CSS cho biểu tượng loading */
-        #loading {
-            display: none;
-            text-align: center;
-            margin-top: 20px;
-        }
-        .spinner {
-            border: 4px solid #f3f3f3; /* Màu nền */
-            border-top: 4px solid #3498db; /* Màu xoay */
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
-        }
-        /* Hiệu ứng xoay */
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
+    <link rel="stylesheet" href="./css/index.css">
+    <link rel="stylesheet" href="./css/tailwind.css">
 </head>
+
 <body>
-    <h1>Tracking Codes Submission</h1>
-    <textarea id="tracking-codes" placeholder="Enter tracking codes, one per line..."></textarea>
-    <button id="submit-btn">Submit</button> 
-    <div id="total-count" class="total-count">Total Rows: 0</div>
-    <button id="download-csv-btn">Download Excel</button>
-
-    <!-- Biểu tượng loading -->
-    <div id="loading">
-        <div class="spinner"></div>
+    <div class="navbar bg-green-200 shadow-lg">
+        <div class="flex justify-center w-full">
+          <a class="btn btn-ghost text-3xl font-medium">Blue Eyes Tracking 
+            <div class="avatar">
+            <div class="w-12 rounded-full">
+              <img src="images/BE-icon.png" />
+            </div>
+          </div>
+        </a>
+        </div>
     </div>
-
-    <div id="response">
-        <table id="response-table">
+    
+    <div class="w-full max-h-[50rem] relative mt-2">
+        <div class="w-full h-full absolute bg-slate-900 opacity-60 hover:opacity-80 z-5">
+        </div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 w-2/5 h-2/5">
+            <div class="flex items-center justify-center flex-col">
+                <div class="w-full h-full flex flex-col items-center justify-center">
+                    <div class="text-3xl font-bold text-white mb-4">Start Your Tracking Now With Our Blue Eyes!</div>
+                </div>
+            <textarea id="tracking-codes" placeholder="Enter tracking codes, one per line..."
+                class="textarea textarea-bordered textarea-md"></textarea>
+            <button id="submit-btn" class="btn btn-accent btn-lg flex items-center">
+                <span>TRACK</span>
+                <div class="avatar">
+                    <div class="w-12 rounded-full">
+                        <img src="images/BE-icon.png" />
+                    </div>
+                </div>
+            </button>
+            </div>
+        </div>
+        <img src="./images/background-be.jpg" class="w-full max-h-[50rem] "/>
+    </div>
+    <div class="w-full flex flex-col justify-center items-center pt-6">
+        <div class="font-semibold text-2xl flex items-center w-fit p-2 rounded-md bg-green-400 text-white">
+            <div class="w-12 rounded-full mx-1">
+                <img src="images/BE-icon.png" />
+            </div>
+            <span class="mx-1">RESULTS</span>
+            <div class="w-12 rounded-full mx-1">
+                <img src="images/BE-icon.png" />
+            </div>
+        </div>
+    </div>
+    <div class="flex justify-center w-full my-6">
+        <div class="chat chat-start">
+            <div class="chat-image avatar">
+                <div class="w-36 rounded-full border-2 border-pink-500">
+                  <img
+                    alt="Tailwind CSS chat bubble component"
+                    src="./images/vohung.jpg" />
+                </div>
+            </div>
+            <div class="chat-header text-xl font-semibold">
+              Vợ Hưng
+              <time class="text-xs opacity-50"></time>
+            </div>
+            <div id="message-from-wife" class="chat-bubble text-4xl">Chờ chút nha cưng &lt;3</div>
+            <div class="chat-footer opacity-50">Seen at 12:46</div>
+        </div>
+    </div>
+    <div class="w-full flex flex-col justify-center items-center py-3">
+        <div id="total-count" class="total-count text-xl font-semibold">Total Rows: 0</div>
+        <div>
+            <button id="download-csv-btn" class="btn btn-accent btn-outline">Download Excel</button>
+        </div>
+        <!-- Biểu tượng loading -->
+        <div id="loading">
+            <div class="spinner"></div>
+        </div>
+    </div>
+    <div id="response" class="max-w-screen-xl mx-auto mt-10 p-4 m-4">
+        <table id="response-table" class="table table-zebra w-full border-collapse border border-gray-300 rounded-lg">
             <thead>
                 <tr>
-                    <th>Tracking Code <button class="copy-btn" data-col="0">Copy</button></th>
-                    <th>Country <button class="copy-btn" data-col="1">Copy</button></th>
-                    <th>Location <button class="copy-btn" data-col="2">Copy</button></th>
-                    <th>Date & Time <button class="copy-btn" data-col="3">Copy</button></th>
-                    <th>Status <button class="copy-btn" data-col="4">Copy</button></th>
-                    <th>Additional Info <button class="copy-btn" data-col="5">Copy</button></th>
+                    <th class="px-1"><span class="text-base px-2">Tracking Code</span></th>
+                    <th class="px-1"><span class="text-base px-2">Country</span> </th>
+                    <th class="px-1"><span class="text-base px-2">Location</span></th>
+                    <th class="px-1"><span class="text-base px-2">Date & Time</span></th>
+                    <th class="px-1"><span class="text-base px-2">Status</span></th>
+                    <th class="px-1"><span class="text-base px-2">Additional Info</span></th>
                 </tr>
             </thead>
             <tbody>
@@ -159,9 +131,9 @@
                 // Split result into rows
                 const rows = result.split('\n').filter(row => row.trim() !== '');
                 const tableBody = document.querySelector('#response-table tbody');
-                
+
                 // Clear previous results
-                tableBody.innerHTML = ''; 
+                tableBody.innerHTML = '';
 
                 rows.forEach((row, index) => {
                     const columns = row.split('\\'); // Split columns by '\\'
@@ -198,7 +170,7 @@
 
                 // Update total row count
                 document.getElementById('total-count').textContent = `Total Rows: ${rows.length}`;
-
+                document.getElementById('message-from-wife').textContent = `Xong rồi nha cưng <3`;
             } catch (error) {
                 console.error('Error fetching data:', error);
             } finally {
@@ -228,26 +200,27 @@
 
         // Add event listener for download CSV button
         document.getElementById('download-csv-btn').addEventListener('click', () => {
-        const rows = document.querySelectorAll('#response-table tbody tr');
-        const data = [];
+            const rows = document.querySelectorAll('#response-table tbody tr');
+            const data = [];
 
-        // Extract data from table rows
-        rows.forEach(row => {
-            const cells = Array.from(row.querySelectorAll('td')).map(cell => cell.textContent);
-            data.push(cells);
+            // Extract data from table rows
+            rows.forEach(row => {
+                const cells = Array.from(row.querySelectorAll('td')).map(cell => cell.textContent);
+                data.push(cells);
+            });
+
+            // Create a workbook and worksheet
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(data);
+
+            // Add the worksheet to the workbook
+            XLSX.utils.book_append_sheet(wb, ws, 'Tracking Results');
+
+            // Generate the Excel file and trigger the download
+            XLSX.writeFile(wb, 'tracking_results.xlsx');
         });
-
-        // Create a workbook and worksheet
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.aoa_to_sheet(data);
-
-        // Add the worksheet to the workbook
-        XLSX.utils.book_append_sheet(wb, ws, 'Tracking Results');
-
-        // Generate the Excel file and trigger the download
-        XLSX.writeFile(wb, 'tracking_results.xlsx');
-    });
 
     </script>
 </body>
+
 </html>
