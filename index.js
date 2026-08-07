@@ -8,6 +8,14 @@ app.use(express.json()); // Đảm bảo phân tích cú pháp JSON
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+const USPS_TRACKING_URL = "https://tools.usps.com/go/TrackConfirmAction.action";
+const USPS_API_BASE_URLS = {
+  production: "https://apis.usps.com",
+  test: "https://apis-tem.usps.com",
+};
+const USPS_MAX_TRACKING_PER_REQUEST = 35;
+const PUPPETEER_HEADLESS = process.env.PUPPETEER_HEADLESS !== "false";
+
 // Hàm chia danh sách thành các nhóm nhỏ hơn
 function chunkList(lst, n) {
   const result = [];
@@ -20,140 +28,285 @@ function chunkList(lst, n) {
   return result;
 }
 
-async function convertToCsv(text) {
+function convertRowsToCsv(rows) {
+  return new Promise((resolve, reject) => {
+    stringify(rows, { delimiter: '\\' }, (err, output) => {
+      if (err) reject(err);
+      else resolve(output);
+    });
+  });
+}
+
+function normalizeApiEnvironment(environment) {
+  return environment === "test" ? "test" : "production";
+}
+
+function buildApiErrorRows(trackingNumbers, status, message) {
+  return trackingNumbers.map((trackingNumber) => [
+    trackingNumber,
+    "US",
+    "",
+    "",
+    status,
+    message,
+  ]);
+}
+
+async function readJsonResponse(response) {
+  const text = await response.text();
+  if (!text) {
+    return null;
+  }
+
   try {
-    // Ensure input text is not empty
-    if (!text || typeof text !== "string") {
-      return text;
-    }
-
-    // Split the text into lines
-    const lines = text.trim().split('\n').map(line => line.trim());
-
-    // Extract headers from the first line
-    const headers = lines[0].split(/\s{2,}/);
-
-    // Map remaining lines into an array of rows
-    const rows = lines.slice(1).map(line => line.split(/\t+|\s{2,}/));
-    // console.log("Parsed Rows:", rows); // Debugging rows
-
-    // Define the output headers for the CSV
-    const outputHeaders = [
-      "tracking code",
-      "country",
-      "location",
-      "date & time",
-      "status",
-      "additional info",
-    ];
-
-    // Map rows to match the output format
-    const csvRows = rows.map(row => {
-      const trackingCode = row[0] || "";
-      const country = "";
-      const location = row[4] || "";
-      const dateTime = row[1] || "";
-      const status = row[5] || "";
-      const additionalInfo = row[3] || "";
-
-      return [trackingCode, country, location, dateTime, status, additionalInfo];
-    });
-
-    return new Promise((resolve, reject) => {
-      // Add headers as the first row
-      const csvData = [...csvRows];
-
-      // Use csv-stringify to convert the data to CSV
-      stringify(csvData,{ delimiter: '\\' }, (err, output) => {
-        if (err) reject(err);
-        else resolve(output);
-      });
-    });
+    return JSON.parse(text);
   } catch (error) {
-    console.error("Error in convertToCsv:", error.message);
-    throw error;
+    return { error: text };
   }
 }
 
-// Hàm gửi các mã tracking
+async function getUspsAccessToken({ clientId, clientSecret, environment }) {
+  const baseUrl = USPS_API_BASE_URLS[environment];
+  const response = await fetch(`${baseUrl}/oauth2/v3/token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      grant_type: "client_credentials",
+      client_id: clientId,
+      client_secret: clientSecret,
+    }),
+  });
+  const data = await readJsonResponse(response);
+
+  if (!response.ok) {
+    const message = data?.error_description || data?.error || response.statusText;
+    const error = new Error(`USPS OAuth failed: ${message}`);
+    error.status = response.status;
+    throw error;
+  }
+
+  if (!data?.access_token) {
+    throw new Error("USPS OAuth response did not include an access token.");
+  }
+
+  return data.access_token;
+}
+
+function uspsApiItemToRow(item, fallbackTrackingNumber = "") {
+  const latestEvent = Array.isArray(item?.trackingEvents) && item.trackingEvents.length > 0
+    ? item.trackingEvents[0]
+    : {};
+  const locationParts = [
+    latestEvent.eventCity,
+    latestEvent.eventState,
+    latestEvent.eventZIPCode,
+  ].filter(Boolean);
+  const location = locationParts.join(", ");
+  const dateTime = latestEvent.eventTimestamp || latestEvent.GMTTimestamp || "";
+  const status = item?.status || item?.statusCategory || latestEvent.eventType || "No status";
+  const additionalInfo = [
+    item?.statusSummary,
+    item?.mailClass,
+    item?.statusCategory,
+  ].filter(Boolean).join(" | ");
+
+  return [
+    item?.trackingNumber || fallbackTrackingNumber,
+    latestEvent.eventCountry || item?.destinationCountry || "US",
+    location,
+    dateTime,
+    status,
+    additionalInfo,
+  ];
+}
+
+async function sendTrackingCodesViaUspsApi({ trackingNumbers, clientId, clientSecret, environment }) {
+  const accessToken = await getUspsAccessToken({ clientId, clientSecret, environment });
+  const baseUrl = USPS_API_BASE_URLS[environment];
+  let rows = [];
+
+  let counter = 0;
+  for (const chunk of chunkList(trackingNumbers, USPS_MAX_TRACKING_PER_REQUEST)) {
+    counter += 1;
+    console.log(`Processing USPS API batch ${counter}: ${chunk.length} tracking number(s)`);
+
+    try {
+      const response = await fetch(`${baseUrl}/tracking/v3r2/tracking`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(chunk.map((trackingNumber) => ({ trackingNumber }))),
+      });
+      const data = await readJsonResponse(response);
+
+      if (!response.ok) {
+        const message = data?.error_description || data?.error || data?.message || response.statusText;
+        rows = rows.concat(buildApiErrorRows(chunk, `USPS API ${response.status}`, message));
+        continue;
+      }
+
+      const items = Array.isArray(data) ? data : [data];
+      const returnedTrackingNumbers = new Set();
+      rows = rows.concat(items.map((item, index) => {
+        const fallbackTrackingNumber = chunk[index] || "";
+        const row = uspsApiItemToRow(item, fallbackTrackingNumber);
+        if (row[0]) {
+          returnedTrackingNumbers.add(row[0]);
+        }
+        return row;
+      }));
+
+      rows = rows.concat(chunk
+        .filter((trackingNumber) => !returnedTrackingNumbers.has(trackingNumber))
+        .map((trackingNumber) => [
+          trackingNumber,
+          "US",
+          "",
+          "",
+          "No USPS API result found",
+          "USPS API did not return a matching item for this tracking number.",
+        ]));
+    } catch (error) {
+      rows = rows.concat(buildApiErrorRows(chunk, "USPS API Error", error.message));
+    }
+  }
+
+  return convertRowsToCsv(rows);
+}
+
+async function extractUspsRows(page, requestedTrackingNumbers) {
+  return page.evaluate((requestedTrackingNumbers) => {
+    const normalize = (value) => (value || "").replace(/\s+/g, " ").trim();
+    const monthDateRegex = /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b.+\b\d{4}\b/i;
+    const numericDateRegex = /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/;
+    const locationRegex = /\b[A-Z][A-Z\s.'-]+,\s*[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?\b/;
+    const ignoredLines = new Set([
+      "Remove",
+      "Tracking Number:",
+      "Copy",
+      "Copy Add to Informed Delivery",
+      "Add to Informed Delivery",
+      "Latest Update",
+      "Track Another Package",
+      "Need More Help?",
+      "Contact USPS Tracking support for further assistance.",
+      "FAQs",
+      "Enter and submit the send date.",
+      "Send Date (MM/DD/YYYY)",
+      "Submit",
+    ]);
+
+    const cleanLines = (lines, trackingNumber = "") => lines
+      .map(normalize)
+      .filter(Boolean)
+      .filter((line) => !ignoredLines.has(line))
+      .filter((line) => line !== trackingNumber);
+
+    const blocks = Array.from(document.querySelectorAll(".track-bar-container"))
+      .map((container) => {
+        const fullText = container.innerText || "";
+        const trackingNumber = normalize(container.querySelector(".tracking-number")?.innerText)
+          || requestedTrackingNumbers.find((code) => fullText.includes(code))
+          || "";
+        const rawLines = fullText.split("\n").map(normalize).filter(Boolean);
+
+        const latestUpdateIndex = rawLines.findIndex((line) => /latest update/i.test(line));
+        const candidateLines = latestUpdateIndex >= 0 ? rawLines.slice(latestUpdateIndex + 1) : rawLines;
+        const updateLines = cleanLines(candidateLines, trackingNumber);
+        const dateTime = updateLines.find((line) => monthDateRegex.test(line) || numericDateRegex.test(line)) || "";
+        const location = updateLines.find((line) => locationRegex.test(line)) || "";
+        const status = updateLines.find((line) => line !== dateTime && line !== location) || "";
+        const additionalInfo = updateLines
+          .filter((line) => line !== status && line !== dateTime && line !== location)
+          .join(" | ");
+
+        return [
+          trackingNumber,
+          "US",
+          location,
+          dateTime,
+          status,
+          additionalInfo,
+        ];
+      })
+      .filter((row) => row[0]);
+
+    const foundTrackingNumbers = new Set(blocks.map((row) => row[0]));
+    const missingBlocks = requestedTrackingNumbers
+      .filter((trackingNumber) => !foundTrackingNumbers.has(trackingNumber))
+      .map((trackingNumber) => [
+        trackingNumber,
+        "US",
+        "",
+        "",
+        "No USPS result found",
+        "USPS did not render a tracking result block for this number.",
+      ]);
+
+    return [...blocks, ...missingBlocks];
+  }, requestedTrackingNumbers);
+}
+
 async function sendTrackingCodes(trackingNumbers) {
-  let text = ""; // Initialize the result text
-  const url = "https://www.ship24.com/tracking";
+  let rows = [];
+  let browser;
 
   try {
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    browser = await puppeteer.launch({
+      headless: PUPPETEER_HEADLESS,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--window-size=1365,900',
+      ],
     });
     const context = await browser.createBrowserContext();
     const page = await context.newPage();
-
-    // Gán quyền clipboard cho trang web
-    await context.overridePermissions('https://www.ship24.com/tracking', ['clipboard-read', 'clipboard-write']);
-
-    // const isClipboardSupported = 'clipboard' in navigator;
-    // console.log('Clipboard supported:', isClipboardSupported);
+    await page.setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
 
     console.log("Start...");
     let counter = 0;
-    for (const chunk of chunkList(trackingNumbers, 10)) {
+    for (const chunk of chunkList(trackingNumbers, USPS_MAX_TRACKING_PER_REQUEST)) {
       counter += 1;
-      const trackingNumbersStr = chunk.join(",");
-      let params = "p=".concat(trackingNumbersStr);
-      // console.log(params);
-      console.log(counter);
+      const params = new URLSearchParams({ tLabels: chunk.join(",") });
+      console.log(`Processing USPS batch ${counter}: ${chunk.length} tracking number(s)`);
 
       try {
-        await page.goto(`${url}?${params}`);
-
-        // Tự động chấp nhận cookies nếu có popup
-        // await page.evaluate(() => {
-        //   // Tìm nút "Accept Cookies" (hoặc tương tự) trên trang
-        //   const acceptButton = document.querySelector('[aria-label="Accept all cookies"]') || 
-        //                        document.querySelector('[data-cookieconsent="accept"]') || 
-        //                        document.querySelector('button.accept-cookies'); // Thêm các selector khác nếu cần
-        //   if (acceptButton) {
-        //     acceptButton.click();
-        //   }
-        // });
-
-        const iconSelector = 'i.text-2xl.text-gray-500.s24-copy.mr-2';
-        await page.waitForSelector(iconSelector, { timeout: 0 });
-        const iconElement = await page.$(iconSelector);
-        if (iconElement) {
-          await iconElement.click();
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          // console.log("1st click");
-          const clipboardData = await page.$$eval("button span", async (spans) => {
-            for (let span of spans) {
-              if (span.textContent.trim() === "Copy status and last event details") {
-                const button = span.closest('button');
-                await button.click();
-                await new Promise((resolve) => setTimeout(resolve, 500)); 
-                return navigator.clipboard.readText();
-              }
-            }
-            return null; // Return null if no matching button is found
-          });
-
-          if (clipboardData) {
-            // console.log("clipboard: " +  clipboardData || "none");
-            text += await convertToCsv(clipboardData) + "\n";
-          }
-        }
+        await page.goto(`${USPS_TRACKING_URL}?${params.toString()}`, {
+          waitUntil: "networkidle2",
+          timeout: 60000,
+        });
+        await page.waitForSelector(".track-bar-container, .tracking-number", { timeout: 45000 });
+        rows = rows.concat(await extractUspsRows(page, chunk));
       } catch (err) {
-        console.error(`Error processing chunk: ${params}`, err);
-        return text;
+        console.error(`Error processing USPS batch ${counter}: ${params.toString()}`, err);
+        rows = rows.concat(chunk.map((trackingNumber) => [
+          trackingNumber,
+          "US",
+          "",
+          "",
+          "Error",
+          err.message,
+        ]));
       }
     }
 
-    await browser.close();
     console.log("done\n");
   } catch (err) {
     console.error("An error occurred:", err);
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
   }
 
-  return text; // Return the final processed text
+  return convertRowsToCsv(rows);
 }
 
 
@@ -244,6 +397,10 @@ app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+app.get("/api", (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'api.html'));
+});
+
 app.post("/tracking", async (req, res) => {
     const { trackingCodes } = req.body;
     if (!Array.isArray(trackingCodes) || trackingCodes.length === 0) {
@@ -255,6 +412,34 @@ app.post("/tracking", async (req, res) => {
     } catch (error) {
       console.error(error);
       res.status(500).send("Error processing request");
+    }
+  });
+
+app.post("/api-tracking", async (req, res) => {
+    const { trackingCodes, clientId, clientSecret, environment } = req.body;
+    const normalizedEnvironment = normalizeApiEnvironment(environment);
+    const resolvedClientId = clientId || process.env.USPS_CLIENT_ID;
+    const resolvedClientSecret = clientSecret || process.env.USPS_CLIENT_SECRET;
+
+    if (!Array.isArray(trackingCodes) || trackingCodes.length === 0) {
+      return res.status(400).send("Invalid tracking codes");
+    }
+
+    if (!resolvedClientId || !resolvedClientSecret) {
+      return res.status(400).send("Missing USPS API credentials");
+    }
+
+    try {
+      const outputText = await sendTrackingCodesViaUspsApi({
+        trackingNumbers: trackingCodes,
+        clientId: resolvedClientId,
+        clientSecret: resolvedClientSecret,
+        environment: normalizedEnvironment,
+      });
+      res.send({ result: outputText });
+    } catch (error) {
+      console.error("USPS API tracking error:", error.message);
+      res.status(error.status || 500).send(error.message || "Error processing USPS API request");
     }
   });
 

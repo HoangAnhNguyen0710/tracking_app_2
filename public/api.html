@@ -4,8 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tracking Codes Submission</title>
-    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script> -->
+    <title>USPS API Tracking</title>
     <script src="./xlsx.full.min.js"></script>
     <link rel="stylesheet" href="./css/tailwind.css">
     <link rel="stylesheet" href="./css/index.css">
@@ -16,32 +15,68 @@
         <div class="app-shell header-content">
             <div>
                 <div class="brand-title">Blue Eyes Tracking</div>
-                <div class="brand-subtitle">USPS browser-based tracking workspace</div>
+                <div class="brand-subtitle">USPS API tracking workspace</div>
             </div>
             <nav class="header-actions">
-                <a href="/" class="nav-link active">Browser Mode</a>
-                <a href="/api" class="nav-link">USPS API Mode</a>
+                <a href="/" class="nav-link">Browser Mode</a>
+                <a href="/api" class="nav-link active">USPS API Mode</a>
             </nav>
         </div>
     </header>
 
     <main class="app-shell page-grid">
-        <section class="panel input-panel">
-            <div class="section-heading">
-                <div>
-                    <h1>Track USPS Packages</h1>
-                    <p>Paste tracking numbers below. This mode uses the public USPS tracking page in background batches of 35.</p>
+        <section class="panel input-panel api-layout">
+            <div class="credentials-panel">
+                <div class="section-heading">
+                    <div>
+                        <h1>USPS API Access</h1>
+                        <p>Use your USPS Consumer Key and Secret for official API requests.</p>
+                    </div>
+                    <span class="mode-badge">Account required</span>
                 </div>
-                <span class="mode-badge">No API account</span>
+                <label class="form-control w-full">
+                    <div class="label">
+                        <span class="label-text">Consumer Key / Client ID</span>
+                    </div>
+                    <input id="client-id" type="text" class="input input-bordered w-full" autocomplete="off" />
+                </label>
+                <label class="form-control w-full mt-3">
+                    <div class="label">
+                        <span class="label-text">Consumer Secret</span>
+                    </div>
+                    <input id="client-secret" type="password" class="input input-bordered w-full" autocomplete="off" />
+                </label>
+                <label class="form-control w-full mt-3">
+                    <div class="label">
+                        <span class="label-text">Environment</span>
+                    </div>
+                    <select id="environment" class="select select-bordered w-full">
+                        <option value="production" selected>Production</option>
+                        <option value="test">Test / TEM</option>
+                    </select>
+                </label>
+                <label class="label cursor-pointer justify-start gap-3 mt-3">
+                    <input id="remember-credentials" type="checkbox" class="checkbox checkbox-accent" />
+                    <span class="label-text">Keep credentials in this tab</span>
+                </label>
+                <button id="clear-credentials-btn" class="btn btn-outline mt-2">Clear Credentials</button>
             </div>
 
-            <textarea id="tracking-codes" placeholder="Enter USPS tracking codes, one per line..."
-                class="textarea textarea-bordered textarea-md tracking-textarea"></textarea>
-
-            <div class="toolbar">
-                <button id="submit-btn" class="btn btn-primary">Run Tracking</button>
-                <button id="clear-input-btn" class="btn btn-secondary">Clear Input</button>
-                <button id="clear-results-btn" class="btn btn-secondary">Clear Results</button>
+            <div class="tracking-panel">
+                <div class="section-heading">
+                    <div>
+                        <h2>Tracking Codes</h2>
+                        <p>Requests are sent in batches of 35 and appended as each batch completes.</p>
+                    </div>
+                </div>
+                <textarea id="tracking-codes" placeholder="Enter USPS tracking codes, one per line..."
+                    class="textarea textarea-bordered textarea-md tracking-textarea"></textarea>
+                <div class="toolbar">
+                    <button id="submit-btn" class="btn btn-primary">Run API Tracking</button>
+                    <button id="clear-input-btn" class="btn btn-secondary">Clear Input</button>
+                    <button id="clear-results-btn" class="btn btn-secondary">Clear Results</button>
+                    <button id="download-csv-btn" class="btn btn-outline">Download Excel</button>
+                </div>
             </div>
         </section>
 
@@ -49,7 +84,7 @@
             <div class="metrics-row">
                 <div>
                     <div class="metric-label">Status</div>
-                    <div id="message-from-wife" class="metric-value">Ready</div>
+                    <div id="message" class="metric-value">Ready</div>
                 </div>
                 <div>
                     <div class="metric-label">Results</div>
@@ -65,38 +100,33 @@
                 <progress id="progress-bar" class="progress progress-accent w-full" value="0" max="100"></progress>
             </div>
 
-            <div class="toolbar compact">
-                <button id="download-csv-btn" class="btn btn-outline">Download Excel</button>
-                <div id="loading">
-                    <div class="spinner"></div>
-                </div>
+            <div id="loading">
+                <div class="spinner"></div>
             </div>
         </section>
 
         <section id="response" class="panel results-panel">
             <div class="section-heading table-heading">
                 <div>
-                    <h2>Tracking Results</h2>
-                    <p>Completed batches appear here immediately.</p>
+                    <h2>API Tracking Results</h2>
+                    <p>Official USPS API responses are mapped into the export format below.</p>
                 </div>
             </div>
             <div class="table-wrap">
-        <table id="response-table" class="table table-zebra w-full border-collapse border border-gray-300 rounded-lg">
-            <thead>
-                <tr>
-                    <th class="px-1"><span class="text-base px-2">Tracking Code</span></th>
-                    <th class="px-1"><span class="text-base px-2">Country</span> </th>
-                    <th class="px-1"><span class="text-base px-2">Location</span></th>
-                    <th class="px-1"><span class="text-base px-2">Date & Time</span></th>
-                    <th class="px-1"><span class="text-base px-2">Status</span></th>
-                    <th class="px-1"><span class="text-base px-2">Additional Info</span></th>
-                    <th class="px-1"><span class="text-base px-2">Actions</span></th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- Rows will be inserted here by JavaScript -->
-            </tbody>
-        </table>
+            <table id="response-table" class="table table-zebra w-full border-collapse border border-gray-300 rounded-lg">
+                <thead>
+                    <tr>
+                        <th class="px-1"><span class="text-base px-2">Tracking Code</span></th>
+                        <th class="px-1"><span class="text-base px-2">Country</span></th>
+                        <th class="px-1"><span class="text-base px-2">Location</span></th>
+                        <th class="px-1"><span class="text-base px-2">Date & Time</span></th>
+                        <th class="px-1"><span class="text-base px-2">Status</span></th>
+                        <th class="px-1"><span class="text-base px-2">Additional Info</span></th>
+                        <th class="px-1"><span class="text-base px-2">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
             </div>
         </section>
     </main>
@@ -106,6 +136,11 @@
         let totalRows = 0;
         let isTracking = false;
 
+        const clientIdInput = document.getElementById('client-id');
+        const clientSecretInput = document.getElementById('client-secret');
+        const environmentSelect = document.getElementById('environment');
+        const rememberCredentials = document.getElementById('remember-credentials');
+        const clearCredentialsBtn = document.getElementById('clear-credentials-btn');
         const trackingInput = document.getElementById('tracking-codes');
         const submitBtn = document.getElementById('submit-btn');
         const clearInputBtn = document.getElementById('clear-input-btn');
@@ -114,10 +149,33 @@
         const tableBody = document.querySelector('#response-table tbody');
         const loading = document.getElementById('loading');
         const totalCount = document.getElementById('total-count');
-        const messageFromWife = document.getElementById('message-from-wife');
+        const message = document.getElementById('message');
         const progressBar = document.getElementById('progress-bar');
         const progressLabel = document.getElementById('progress-label');
         const batchLabel = document.getElementById('batch-label');
+
+        function loadCredentials() {
+            const saved = JSON.parse(sessionStorage.getItem('uspsApiCredentials') || 'null');
+            if (!saved) return;
+
+            clientIdInput.value = saved.clientId || '';
+            clientSecretInput.value = saved.clientSecret || '';
+            environmentSelect.value = saved.environment || 'production';
+            rememberCredentials.checked = true;
+        }
+
+        function saveCredentialsIfRequested() {
+            if (!rememberCredentials.checked) {
+                sessionStorage.removeItem('uspsApiCredentials');
+                return;
+            }
+
+            sessionStorage.setItem('uspsApiCredentials', JSON.stringify({
+                clientId: clientIdInput.value.trim(),
+                clientSecret: clientSecretInput.value.trim(),
+                environment: environmentSelect.value,
+            }));
+        }
 
         function chunkList(list, size) {
             const chunks = [];
@@ -140,6 +198,7 @@
             clearInputBtn.disabled = isTracking;
             clearResultsBtn.disabled = isTracking;
             downloadBtn.disabled = isTracking;
+            clearCredentialsBtn.disabled = isTracking;
             loading.style.display = isTracking ? 'block' : 'none';
         }
 
@@ -155,7 +214,7 @@
             totalRows = 0;
             totalCount.textContent = 'Total Rows: 0';
             updateProgress(0, 0);
-            messageFromWife.textContent = 'Ready';
+            message.textContent = 'Ready';
         }
 
         function appendRows(resultText) {
@@ -204,36 +263,51 @@
         }
 
         submitBtn.addEventListener('click', async () => {
+            const clientId = clientIdInput.value.trim();
+            const clientSecret = clientSecretInput.value.trim();
+            const environment = environmentSelect.value;
             const trackingCodes = getTrackingCodes();
+
+            if (!clientId || !clientSecret) {
+                alert('Please enter USPS Consumer Key and Consumer Secret.');
+                return;
+            }
 
             if (trackingCodes.length === 0) {
                 alert('Please enter at least one USPS tracking code.');
                 return;
             }
 
+            saveCredentialsIfRequested();
             clearResults();
             setTrackingState(true);
 
             const batches = chunkList(trackingCodes, MAX_TRACKING_PER_BATCH);
             updateProgress(0, batches.length);
-            messageFromWife.textContent = `Running ${trackingCodes.length} USPS tracking code(s)...`;
+            message.textContent = `Running ${trackingCodes.length} USPS API tracking code(s)...`;
 
             try {
                 for (let index = 0; index < batches.length; index++) {
                     const batch = batches[index];
                     batchLabel.textContent = `Running batch ${index + 1}/${batches.length}`;
-                    messageFromWife.textContent = `Processing batch ${index + 1}/${batches.length} (${batch.length} code(s))...`;
+                    message.textContent = `Processing API batch ${index + 1}/${batches.length} (${batch.length} code(s))...`;
 
-                    const response = await fetch('/tracking', {
+                    const response = await fetch('/api-tracking', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ trackingCodes: batch })
+                        body: JSON.stringify({
+                            trackingCodes: batch,
+                            clientId,
+                            clientSecret,
+                            environment,
+                        })
                     });
 
                     if (!response.ok) {
-                        throw new Error(`Batch ${index + 1} failed`);
+                        const errorText = await response.text();
+                        throw new Error(errorText || `Batch ${index + 1} failed`);
                     }
 
                     const data = await response.json();
@@ -241,10 +315,10 @@
                     updateProgress(index + 1, batches.length);
                 }
 
-                messageFromWife.textContent = `Complete`;
+                message.textContent = 'Done';
             } catch (error) {
-                console.error('Error fetching data:', error);
-                messageFromWife.textContent = `A batch failed. Review the request and try again.`;
+                console.error('Error fetching USPS API data:', error);
+                message.textContent = 'A batch failed. Check credentials, API access, or quota.';
                 alert(error.message);
             } finally {
                 setTrackingState(false);
@@ -262,26 +336,16 @@
             clearResults();
         });
 
-        // Add event listener for copy buttons
-        document.querySelectorAll('.copy-btn').forEach(button => {
-            button.addEventListener('click', () => {
-                const colIndex = button.getAttribute('data-col');
-                const table = document.querySelector('#response-table');
-                const cells = table.querySelectorAll(`tbody tr td:nth-child(${parseInt(colIndex) + 1})`);
-
-                // Create a temporary textarea to copy the text
-                const tempTextarea = document.createElement('textarea');
-                tempTextarea.value = Array.from(cells).map(cell => cell.textContent).join('\n');
-                document.body.appendChild(tempTextarea);
-                tempTextarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(tempTextarea);
-
-                alert('Column data copied to clipboard!');
-            });
+        clearCredentialsBtn.addEventListener('click', () => {
+            if (isTracking) return;
+            clientIdInput.value = '';
+            clientSecretInput.value = '';
+            environmentSelect.value = 'production';
+            rememberCredentials.checked = false;
+            sessionStorage.removeItem('uspsApiCredentials');
+            clientIdInput.focus();
         });
 
-        // Add event listener for download CSV button
         downloadBtn.addEventListener('click', () => {
             const rows = document.querySelectorAll('#response-table tbody tr');
             if (rows.length === 0) {
@@ -290,8 +354,6 @@
             }
 
             const data = [];
-
-            // Extract data from table rows
             rows.forEach(row => {
                 const cells = Array.from(row.querySelectorAll('td'))
                     .slice(0, 6)
@@ -299,17 +361,13 @@
                 data.push(cells);
             });
 
-            // Create a workbook and worksheet
             const wb = XLSX.utils.book_new();
             const ws = XLSX.utils.aoa_to_sheet(data);
-
-            // Add the worksheet to the workbook
-            XLSX.utils.book_append_sheet(wb, ws, 'Tracking Results');
-
-            // Generate the Excel file and trigger the download
-            XLSX.writeFile(wb, 'tracking_results.xlsx');
+            XLSX.utils.book_append_sheet(wb, ws, 'USPS API Results');
+            XLSX.writeFile(wb, 'usps_api_tracking_results.xlsx');
         });
 
+        loadCredentials();
     </script>
 </body>
 
