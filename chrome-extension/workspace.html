@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Blue Eyes USPS Tracker Workspace</title>
+  <link rel="stylesheet" href="workspace.css" />
+</head>
+
+<body>
+  <header class="app-header">
+    <div>
+      <h1>Blue Eyes USPS Tracker</h1>
+      <p>Persistent workspace for long USPS tracking jobs</p>
+    </div>
+    <span id="state-badge" class="badge">Ready</span>
+  </header>
+
+  <main class="app-shell">
+    <section class="panel input-panel">
+      <div class="section-heading">
+        <div>
+          <h2>Tracking Codes</h2>
+          <p>This workspace remains open while you switch tabs. USPS requests run with 3 parallel workers, 10 codes per worker, and a 30-second timeout per batch.</p>
+        </div>
+      </div>
+      <textarea id="tracking-codes" placeholder="Enter USPS tracking codes, one per line"></textarea>
+      <div class="actions">
+        <button id="start-btn" class="primary">Start Tracking</button>
+        <button id="stop-btn">Stop</button>
+        <button id="clear-input-btn">Clear Input</button>
+        <button id="clear-results-btn">Clear Results</button>
+        <button id="download-btn">Download CSV</button>
+      </div>
+    </section>
+
+    <section class="panel status-panel">
+      <div class="status-grid">
+        <div>
+          <span class="label">Progress</span>
+          <strong id="progress-label">0%</strong>
+        </div>
+        <div>
+          <span class="label">Rows</span>
+          <strong id="row-count">0</strong>
+        </div>
+        <div>
+          <span class="label">Batch</span>
+          <strong id="batch-label">Ready</strong>
+        </div>
+      </div>
+      <progress id="progress-bar" value="0" max="100"></progress>
+      <p id="message">Ready</p>
+    </section>
+
+    <section class="panel results-panel">
+      <div class="section-heading">
+        <div>
+          <h2>Results</h2>
+          <p>Rows are returned in the same order as the original input.</p>
+        </div>
+      </div>
+      <div class="copy-toolbar">
+        <button id="copy-all-btn">Copy All Rows</button>
+        <button class="copy-column-btn" data-column="0">Copy Tracking Codes</button>
+        <button class="copy-column-btn" data-column="2">Copy Locations</button>
+        <button class="copy-column-btn" data-column="3">Copy Date & Time</button>
+        <button class="copy-column-btn" data-column="4">Copy Status</button>
+        <button class="copy-column-btn" data-column="5">Copy Delivery Date</button>
+        <button class="copy-column-btn" data-column="6">Copy Last Update Date</button>
+        <button class="copy-column-btn" data-column="7">Copy Additional Info</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Tracking Code</th>
+              <th>Country</th>
+              <th>Location</th>
+              <th>Date & Time</th>
+              <th>Status</th>
+              <th>Delivery Date</th>
+              <th>Last Update Date</th>
+              <th>Additional Info</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="workspace.js"></script>
+</body>
+
+</html>

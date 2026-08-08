@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Blue Eyes USPS Tracker</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+
+<body>
+  <main class="app">
+    <header class="header">
+      <div>
+        <h1>Blue Eyes USPS Tracker</h1>
+        <p>Chrome extension prototype</p>
+      </div>
+      <span id="state-badge" class="badge">Ready</span>
+    </header>
+
+    <section class="panel workspace-callout">
+      <p>For tracking jobs, use the persistent workspace. Chrome closes popups when you switch tabs.</p>
+      <button id="open-workspace-btn" class="primary">Open Workspace</button>
+    </section>
+
+    <section class="panel">
+      <label for="tracking-codes">Tracking codes</label>
+      <textarea id="tracking-codes" placeholder="Enter USPS tracking codes, one per line"></textarea>
+      <div class="actions">
+        <button id="start-btn" class="primary">Start in Workspace</button>
+        <button id="stop-btn">Stop</button>
+        <button id="clear-input-btn">Clear Input</button>
+        <button id="clear-results-btn">Clear Results</button>
+      </div>
+    </section>
+
+    <section class="panel status">
+      <div class="status-row">
+        <div>
+          <span class="label">Progress</span>
+          <strong id="progress-label">0%</strong>
+        </div>
+        <div>
+          <span class="label">Rows</span>
+          <strong id="row-count">0</strong>
+        </div>
+      </div>
+      <progress id="progress-bar" value="0" max="100"></progress>
+      <p id="message">Ready</p>
+      <button id="download-btn" class="download">Download CSV</button>
+      <button id="copy-all-btn" class="download">Copy All Rows</button>
+    </section>
+
+    <section class="panel results-panel">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Tracking Code</th>
+              <th>Country</th>
+              <th>Location</th>
+              <th>Date & Time</th>
+              <th>Status</th>
+              <th>Delivery Date</th>
+              <th>Last Update Date</th>
+              <th>Additional Info</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>
