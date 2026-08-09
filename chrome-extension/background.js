@@ -10,6 +10,13 @@ const state = {
 };
 
 const FALLBACK_BATCH_SIZES = [10, 5, 1];
+const AFTER_FILL_DELAY_MS = 2500;
+const AFTER_SUBMIT_DELAY_MS = 6500;
+
+function isBlockingError(error) {
+  return /Access Denied|permission to access|errors\.edgesuite\.net|temporarily unavailable/i
+    .test(error?.message || "");
+}
 
 function chunkList(list, size) {
   const chunks = [];
@@ -36,9 +43,12 @@ function unsupportedCarrierRow(trackingNumber) {
   ];
 }
 
-function trackingUrl(trackingCodes) {
-  const params = new URLSearchParams({ tLabels: trackingCodes.join(",") });
-  return `https://tools.usps.com/go/TrackConfirmAction.action?${params.toString()}`;
+function uspsLandingUrl() {
+  return "https://www.usps.com/";
+}
+
+function trackingHomeUrl() {
+  return "https://tools.usps.com/tracking/";
 }
 
 async function waitForTabLoaded(tabId) {
@@ -69,10 +79,9 @@ async function ensureTab() {
 
   const tab = await chrome.tabs.create({
     active: false,
-    url: "https://tools.usps.com/tracking/",
+    url: "about:blank",
   });
   state.activeTabId = tab.id;
-  await waitForTabLoaded(tab.id);
   return tab.id;
 }
 
@@ -82,7 +91,7 @@ async function extractRowsFromTab(tabId, trackingCodes) {
     files: ["content.js"],
   });
 
-  for (let attempt = 0; attempt < 45; attempt++) {
+  for (let attempt = 0; attempt < 60; attempt++) {
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId },
       func: () => ({
@@ -105,18 +114,141 @@ async function extractRowsFromTab(tabId, trackingCodes) {
     await wait(1000);
   }
 
-  throw new Error("Timed out waiting for USPS tracking results.");
+  throw new Error("Timed out waiting 60 seconds for USPS tracking results after submit.");
 }
 
 async function processBatch(batch) {
   const tabId = await ensureTab();
-  const loadPromise = waitForTabLoaded(tabId);
+  const landingLoadPromise = waitForTabLoaded(tabId);
   await chrome.tabs.update(tabId, {
     active: false,
-    url: trackingUrl(batch),
+    url: uspsLandingUrl(),
   });
-  await loadPromise;
-  await wait(2500);
+  await landingLoadPromise;
+  await wait(1500);
+
+  const trackLoadPromise = waitForTabLoaded(tabId);
+  const [{ result: quickToolsResult }] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => {
+      const normalize = (value) => (value || "").replace(/\s+/g, " ").trim();
+      const clickElement = (element) => {
+        element.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+        element.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+        element.click();
+      };
+
+      const quickToolsElement = Array.from(document.querySelectorAll("a, button"))
+        .find((element) => /quick\s*tools/i.test(normalize(element.innerText || element.getAttribute("aria-label"))));
+      if (quickToolsElement) {
+        clickElement(quickToolsElement);
+      }
+
+      const trackLink = Array.from(document.querySelectorAll("a, button"))
+        .find((element) => {
+          const text = normalize(element.innerText || element.value || element.getAttribute("aria-label"));
+          const href = element.href || element.getAttribute("href") || "";
+          return /track\s+a\s+package|tracking/i.test(text)
+            || /TrackConfirmAction|tools\.usps\.com\/tracking/i.test(href);
+        });
+
+      if (!trackLink) {
+        return { ok: false };
+      }
+
+      clickElement(trackLink);
+      return { ok: true };
+    },
+  });
+
+  if (quickToolsResult?.ok) {
+    await trackLoadPromise;
+  } else {
+    const fallbackLoadPromise = waitForTabLoaded(tabId);
+    await chrome.tabs.update(tabId, {
+      active: false,
+      url: trackingHomeUrl(),
+    });
+    await fallbackLoadPromise;
+  }
+  await wait(1200);
+
+  const [{ result }] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: async (trackingCodes, fillDelayMs) => {
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const normalize = (value) => (value || "").replace(/\s+/g, " ").trim();
+      const selectors = [
+        "textarea[name='tLabels']",
+        "input[name='tLabels']",
+        "#tLabels",
+        "#tracking-input",
+        "#tracking-input-search",
+        "textarea",
+        "input[type='text']",
+        "input[type='search']",
+      ];
+      const input = selectors
+        .map((selector) => document.querySelector(selector))
+        .find((element) => element && !element.disabled && element.offsetParent !== null);
+
+      if (!input) {
+        return { ok: false, reason: "Could not find USPS tracking input." };
+      }
+
+      input.scrollIntoView({ behavior: "smooth", block: "center" });
+      await wait(800);
+      input.focus();
+      await wait(400);
+      input.value = "";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      await wait(300);
+      input.value = trackingCodes.join(",");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      await wait(fillDelayMs);
+
+      const normalizedInputValue = normalize(input.value);
+      if (!normalizedInputValue.includes(trackingCodes[0]) || !normalizedInputValue.includes(trackingCodes[trackingCodes.length - 1])) {
+        return { ok: false, reason: "USPS tracking input did not keep the filled tracking codes." };
+      }
+
+      const submitButton = Array.from(document.querySelectorAll("button, input[type='submit']"))
+        .find((element) => (
+          element.offsetParent !== null
+          && !element.disabled
+          && /track|submit/i.test(element.innerText || element.value || element.getAttribute("aria-label") || "")
+        ));
+      if (submitButton) {
+        await wait(1000);
+        submitButton.click();
+        return { ok: true };
+      }
+
+      await wait(1000);
+      input.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "Enter",
+        code: "Enter",
+      }));
+      input.dispatchEvent(new KeyboardEvent("keyup", {
+        bubbles: true,
+        cancelable: true,
+        key: "Enter",
+        code: "Enter",
+      }));
+
+      return { ok: true };
+    },
+    args: [batch, AFTER_FILL_DELAY_MS],
+  });
+
+  if (!result?.ok) {
+    throw new Error(result?.reason || "Could not submit USPS tracking form.");
+  }
+
+  await wait(AFTER_SUBMIT_DELAY_MS);
 
   const response = await extractRowsFromTab(tabId, batch);
   return response.rows || [];
@@ -167,6 +299,9 @@ async function runQueue() {
       const rows = await processBatchWithFallback(batch);
       state.results.push(...rows);
     } catch (error) {
+      if (isBlockingError(error)) {
+        throw error;
+      }
       state.results.push(...batch.map((trackingNumber) => [
         trackingNumber,
         "US",

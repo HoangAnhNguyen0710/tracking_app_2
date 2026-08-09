@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Blue Eyes USPS Tracker",
-  "version": "0.1.0",
+  "version": "0.1.8",
   "description": "Batch USPS tracking helper that runs in Chrome and exports tracking results.",
   "action": {
     "default_popup": "popup.html",
@@ -16,6 +16,7 @@
     "scripting"
   ],
   "host_permissions": [
+    "https://www.usps.com/*",
     "https://tools.usps.com/*"
   ]
 }
